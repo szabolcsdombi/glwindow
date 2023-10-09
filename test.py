@@ -1,26 +1,20 @@
 import glwindow
 import zengl
 
-glwindow.init()
-
-window = glwindow.get_window()
-audio = glwindow.get_audio()
-
-ctx = zengl.context(glwindow.get_loader())
-image = ctx.image(window.size, 'rgba8unorm', texture=False)
-
-print(window)
-print(audio)
-
 
 class App:
+    def __init__(self):
+        self.wnd = glwindow.get_window()
+        self.audio = glwindow.get_audio()
+        self.ctx = zengl.context(glwindow.get_loader())
+        self.image = self.ctx.image(self.wnd.size, 'rgba8unorm', texture=False)
+
     def update(self):
-        ctx.new_frame()
-        image.clear_value = (0.5, 0.5, 0.5, 1.0)
-        image.clear()
-        image.blit()
-        ctx.end_frame()
+        self.ctx.new_frame()
+        self.image.clear()
+        self.image.blit()
+        self.ctx.end_frame()
 
 
 if __name__ == '__main__':
-    glwindow.run(app=App())
+    glwindow.run(app=App)
