@@ -22,7 +22,6 @@ struct Window {
     PyObject_HEAD
 
     PyObject * size;
-    PyObject * aspect_ratio;
     PyObject * app;
 
     HWND hwnd;
@@ -139,7 +138,6 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     window->width = 1280;
     window->height = 720;
     window->size = Py_BuildValue("(ii)", window->width, window->height);
-    window->aspect_ratio = PyFloat_FromDouble((double)window->width / (double)window->height);
 
     int style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
     int sw = GetSystemMetrics(SM_CXSCREEN);
@@ -279,7 +277,6 @@ static PyMethodDef Window_methods[] = {
 
 static PyMemberDef Window_members[] = {
     {"size", T_OBJECT, offsetof(Window, size), READONLY},
-    {"aspect_ratio", T_OBJECT, offsetof(Window, aspect_ratio), READONLY},
     {0},
 };
 
