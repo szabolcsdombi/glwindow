@@ -66,7 +66,54 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) 
     return DefWindowProc(hwnd, umsg, wparam, lparam);
 }
 
-PyObject * meth_init(PyObject * self, PyObject * args, PyObject * kwargs) {
+PyObject * meth_get_window(PyObject * self) {
+    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
+    return Py_XNewRef(module_state->window);
+}
+
+PyObject * meth_get_loader(PyObject * self) {
+    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
+    return Py_XNewRef(module_state->loader);
+}
+
+PyObject * meth_get_audio(PyObject * self) {
+    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
+    return Py_XNewRef(module_state->audio);
+}
+
+PyObject * meth_decode_qoi(PyObject * self, PyObject * arg) {
+    if (!PyBytes_Check(arg)) {
+        return NULL;
+    }
+    const char * ptr = PyBytes_AsString(arg);
+    int size = (int)PyBytes_Size(arg);
+    qoi_desc header = {};
+    PyObject * data = PyBytes_FromStringAndSize(NULL, qoi_expected_size(ptr, size, 4));
+    qoi_decode((unsigned char *)PyBytes_AsString(data), ptr, size, &header, 4);
+    return Py_BuildValue("((ii)N)", header.width, header.height, data);
+}
+
+PyObject * meth_decode_qoa(PyObject * self, PyObject * arg) {
+    if (!PyBytes_Check(arg)) {
+        return NULL;
+    }
+    const unsigned char * ptr = (unsigned char *)PyBytes_AsString(arg);
+    int size = (int)PyBytes_Size(arg);
+    qoa_desc header = {};
+    PyObject * data = PyBytes_FromStringAndSize(NULL, qoa_expected_size(ptr, size));
+    qoa_decode((short *)PyBytes_AsString(data), ptr, size, &header);
+    return Py_BuildValue("(iiN)", header.channels, header.samplerate, data);
+}
+
+PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
+    const char * keywords[] = {"app", NULL};
+
+    PyObject * app;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **)keywords, &app)) {
+        return NULL;
+    }
+
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
 
     Window * window = PyObject_New(Window, module_state->Window_type);
@@ -160,7 +207,6 @@ PyObject * meth_init(PyObject * self, PyObject * args, PyObject * kwargs) {
         return NULL;
     }
 
-
     wglMakeCurrent(window->hdc, window->hrc);
     wglSwapIntervalEXT(1);
 
@@ -177,67 +223,6 @@ PyObject * meth_init(PyObject * self, PyObject * args, PyObject * kwargs) {
     }
 
     alcMakeContextCurrent(audio->context);
-
-    Py_RETURN_NONE;
-}
-
-PyObject * meth_get_window(PyObject * self) {
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-    return Py_XNewRef(module_state->window);
-}
-
-PyObject * meth_get_loader(PyObject * self) {
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-    return Py_XNewRef(module_state->loader);
-}
-
-PyObject * meth_get_audio(PyObject * self) {
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-    return Py_XNewRef(module_state->audio);
-}
-
-PyObject * meth_decode_qoi(PyObject * self, PyObject * arg) {
-    if (!PyBytes_Check(arg)) {
-        return NULL;
-    }
-    const char * ptr = PyBytes_AsString(arg);
-    int size = (int)PyBytes_Size(arg);
-    qoi_desc header = {};
-    PyObject * data = PyBytes_FromStringAndSize(NULL, qoi_expected_size(ptr, size, 4));
-    qoi_decode((unsigned char *)PyBytes_AsString(data), ptr, size, &header, 4);
-    return Py_BuildValue("((ii)N)", header.width, header.height, data);
-}
-
-PyObject * meth_decode_qoa(PyObject * self, PyObject * arg) {
-    if (!PyBytes_Check(arg)) {
-        return NULL;
-    }
-    const unsigned char * ptr = (unsigned char *)PyBytes_AsString(arg);
-    int size = (int)PyBytes_Size(arg);
-    qoa_desc header = {};
-    PyObject * data = PyBytes_FromStringAndSize(NULL, qoa_expected_size(ptr, size));
-    qoa_decode((short *)PyBytes_AsString(data), ptr, size, &header);
-    return Py_BuildValue("(iiN)", header.channels, header.samplerate, data);
-}
-
-PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
-    const char * keywords[] = {"app", NULL};
-
-    PyObject * app;
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **)keywords, &app)) {
-        return NULL;
-    }
-
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-
-    if (!module_state->window) {
-        PyObject * res = PyObject_CallMethod(self, "init", NULL);
-        Py_XDECREF(res);
-        if (!res) {
-            return NULL;
-        }
-    }
 
     PyObject * old_app = module_state->window->app;
     module_state->window->app = PyObject_CallFunction(app, NULL);
@@ -380,7 +365,6 @@ static PyModuleDef_Slot module_slots[] = {
 };
 
 static PyMethodDef module_methods[] = {
-    {"init", (PyCFunction)meth_init, METH_VARARGS | METH_KEYWORDS, NULL},
     {"run", (PyCFunction)meth_run, METH_VARARGS | METH_KEYWORDS, NULL},
     {"get_window", (PyCFunction)meth_get_window, METH_NOARGS, NULL},
     {"get_loader", (PyCFunction)meth_get_loader, METH_NOARGS, NULL},
