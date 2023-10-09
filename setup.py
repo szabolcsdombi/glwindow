@@ -1,5 +1,11 @@
 from setuptools import Extension, setup
 
+stubs = {
+    'packages': ['glwindow-stubs'],
+    'package_data': {'glwindow-stubs': ['__init__.pyi']},
+    'include_package_data': True,
+}
+
 ext = Extension(
     name='glwindow',
     sources=['./glwindow.cpp'],
@@ -17,4 +23,5 @@ setup(
     name='glwindow',
     version='0.1.0',
     ext_modules=[ext],
+    **stubs,
 )
