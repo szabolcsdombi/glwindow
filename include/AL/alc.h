@@ -213,7 +213,7 @@ ALC_API ALCboolean      ALC_APIENTRY alcCloseDevice( ALCdevice *device );
 ALC_API ALCenum         ALC_APIENTRY alcGetError( ALCdevice *device );
 
 
-/* 
+/*
  * Extension support.
  * Query for the presence of an extension, and obtain any appropriate
  * function pointers and enum values.
