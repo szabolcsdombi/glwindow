@@ -147,7 +147,7 @@ void *qoa_encode(const short *sample_data, qoa_desc *qoa, unsigned int *out_len)
 unsigned int qoa_max_frame_size(qoa_desc *qoa);
 unsigned int qoa_decode_header(const unsigned char *bytes, int size, qoa_desc *qoa);
 unsigned int qoa_decode_frame(const unsigned char *bytes, unsigned int size, qoa_desc *qoa, short *sample_data, unsigned int *frame_len);
-short *qoa_decode(const unsigned char *bytes, int size, qoa_desc *file);
+short *qoa_decode(short *sample_data, const unsigned char *bytes, int size, qoa_desc *file);
 
 #ifndef QOA_NO_STDIO
 
@@ -635,15 +635,20 @@ unsigned int qoa_decode_frame(const unsigned char *bytes, unsigned int size, qoa
     return p;
 }
 
-short *qoa_decode(const unsigned char *bytes, int size, qoa_desc *qoa) {
+int qoa_expected_size(const unsigned char *bytes, int size) {
+    qoa_desc header;
+    unsigned int p = qoa_decode_header(bytes, size, &header);
+    if (!p) {
+        return 0;
+    }
+    return header.samples * header.channels * sizeof(short);
+}
+
+short *qoa_decode(short *sample_data, const unsigned char *bytes, int size, qoa_desc *qoa) {
     unsigned int p = qoa_decode_header(bytes, size, qoa);
     if (!p) {
         return NULL;
     }
-
-    /* Calculate the required size of the sample buffer and allocate */
-    int total_samples = qoa->samples * qoa->channels;
-    short *sample_data = (short *)QOA_MALLOC(total_samples * sizeof(short));
 
     unsigned int sample_index = 0;
     unsigned int frame_len;

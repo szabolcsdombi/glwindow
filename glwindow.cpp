@@ -10,6 +10,14 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
+#define QOI_NO_STDIO
+#define QOI_IMPLEMENTATION
+#include <qoi.h>
+
+#define QOA_NO_STDIO
+#define QOA_IMPLEMENTATION
+#include <qoa.h>
+
 struct Window {
     PyObject_HEAD
 
@@ -188,6 +196,30 @@ PyObject * meth_get_audio(PyObject * self) {
     return Py_XNewRef(module_state->audio);
 }
 
+PyObject * meth_decode_qoi(PyObject * self, PyObject * arg) {
+    if (!PyBytes_Check(arg)) {
+        return NULL;
+    }
+    const char * ptr = PyBytes_AsString(arg);
+    int size = (int)PyBytes_Size(arg);
+    qoi_desc header = {};
+    PyObject * data = PyBytes_FromStringAndSize(NULL, qoi_expected_size(ptr, size, 4));
+    qoi_decode((unsigned char *)PyBytes_AsString(data), ptr, size, &header, 4);
+    return Py_BuildValue("((ii)N)", header.width, header.height, data);
+}
+
+PyObject * meth_decode_qoa(PyObject * self, PyObject * arg) {
+    if (!PyBytes_Check(arg)) {
+        return NULL;
+    }
+    const unsigned char * ptr = (unsigned char *)PyBytes_AsString(arg);
+    int size = (int)PyBytes_Size(arg);
+    qoa_desc header = {};
+    PyObject * data = PyBytes_FromStringAndSize(NULL, qoa_expected_size(ptr, size));
+    qoa_decode((short *)PyBytes_AsString(data), ptr, size, &header);
+    return Py_BuildValue("(iiN)", header.channels, header.samplerate, data);
+}
+
 PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     const char * keywords[] = {"app", NULL};
 
@@ -353,6 +385,8 @@ static PyMethodDef module_methods[] = {
     {"get_window", (PyCFunction)meth_get_window, METH_NOARGS, NULL},
     {"get_loader", (PyCFunction)meth_get_loader, METH_NOARGS, NULL},
     {"get_audio", (PyCFunction)meth_get_audio, METH_NOARGS, NULL},
+    {"decode_qoi", (PyCFunction)meth_decode_qoi, METH_O, NULL},
+    {"decode_qoa", (PyCFunction)meth_decode_qoa, METH_O, NULL},
     {0},
 };
 

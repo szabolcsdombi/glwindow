@@ -286,7 +286,7 @@ is filled with the description from the file header.
 
 The returned pixel data should be free()d after use. */
 
-void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels);
+void *qoi_decode(unsigned char *pixels, const void *data, int size, qoi_desc *desc, int channels);
 
 
 #ifdef __cplusplus
@@ -485,10 +485,18 @@ void *qoi_encode(const void *data, const qoi_desc *desc, int *out_len) {
     return bytes;
 }
 
-void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels) {
+int qoi_expected_size(const void *data, int size, int channels) {
+    int p = 0;
+    const unsigned char *bytes = (unsigned char *)data;
+    unsigned int header_magic = qoi_read_32(bytes, &p);
+    unsigned int width = qoi_read_32(bytes, &p);
+    unsigned int height = qoi_read_32(bytes, &p);
+    return width * height * channels;
+}
+
+void *qoi_decode(unsigned char *pixels, const void *data, int size, qoi_desc *desc, int channels) {
     const unsigned char *bytes;
     unsigned int header_magic;
-    unsigned char *pixels;
     qoi_rgba_t index[64];
     qoi_rgba_t px;
     int px_len, chunks_len, px_pos;
@@ -525,10 +533,6 @@ void *qoi_decode(const void *data, int size, qoi_desc *desc, int channels) {
     }
 
     px_len = desc->width * desc->height * channels;
-    pixels = (unsigned char *) QOI_MALLOC(px_len);
-    if (!pixels) {
-        return NULL;
-    }
 
     QOI_ZEROARR(index);
     px.rgba.r = 0;
