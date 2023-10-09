@@ -13,7 +13,7 @@ print(window)
 print(audio)
 
 
-@window.update
+@window.on_update
 def update():
     ctx.new_frame()
     image.clear_value = (0.5, 0.5, 0.5, 1.0)

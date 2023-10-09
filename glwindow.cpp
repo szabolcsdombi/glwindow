@@ -212,7 +212,7 @@ PyObject * meth_run(PyObject * self) {
     Py_RETURN_NONE;
 }
 
-static PyObject * Window_meth_update(Window * self, PyObject * arg) {
+static PyObject * Window_meth_on_update(Window * self, PyObject * arg) {
     if (!PyCallable_Check(arg)) {
         return NULL;
     }
@@ -245,7 +245,7 @@ static void default_dealloc(PyObject * self) {
 }
 
 static PyMethodDef Window_methods[] = {
-    {"update", (PyCFunction)Window_meth_update, METH_O},
+    {"on_update", (PyCFunction)Window_meth_on_update, METH_O},
     {0},
 };
 
