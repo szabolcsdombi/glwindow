@@ -2,6 +2,7 @@ from typing import Callable, Tuple
 
 class Window:
     size: Tuple[int, int]
+    aspect_ratio: float
     def on_update(self, update: Callable) -> Callable: ...
 
 class Loader:
