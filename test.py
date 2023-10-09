@@ -13,14 +13,14 @@ print(window)
 print(audio)
 
 
-@window.on_update
-def update():
-    ctx.new_frame()
-    image.clear_value = (0.5, 0.5, 0.5, 1.0)
-    image.clear()
-    image.blit()
-    ctx.end_frame()
+class App:
+    def update(self):
+        ctx.new_frame()
+        image.clear_value = (0.5, 0.5, 0.5, 1.0)
+        image.clear()
+        image.blit()
+        ctx.end_frame()
 
 
 if __name__ == '__main__':
-    glwindow.run()
+    glwindow.run(app=App())

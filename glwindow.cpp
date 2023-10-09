@@ -15,7 +15,7 @@ struct Window {
 
     PyObject * size;
     PyObject * aspect_ratio;
-    PyObject * on_update;
+    PyObject * app;
 
     HWND hwnd;
     HDC hdc;
@@ -69,7 +69,7 @@ PyObject * meth_init(PyObject * self, PyObject * args, PyObject * kwargs) {
     module_state->loader = loader;
     module_state->audio = audio;
 
-    window->on_update = Py_None;
+    window->app = Py_None;
 
     HANDLE process = GetCurrentProcess();
     SetPriorityClass(process, HIGH_PRIORITY_CLASS);
@@ -188,8 +188,20 @@ PyObject * meth_get_audio(PyObject * self) {
     return Py_XNewRef(module_state->audio);
 }
 
-PyObject * meth_run(PyObject * self) {
+PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
+    const char * keywords[] = {"app", NULL};
+
+    PyObject * app;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **)keywords, &app)) {
+        return NULL;
+    }
+
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
+
+    PyObject * old_app = module_state->window->app;
+    module_state->window->app = Py_NewRef(app);
+    Py_DECREF(old_app);
 
     while (true) {
         SwapBuffers(module_state->window->hdc);
@@ -204,7 +216,7 @@ PyObject * meth_run(PyObject * self) {
             DispatchMessage(&msg);
         }
 
-        PyObject * res = PyObject_CallFunction(module_state->window->on_update, NULL);
+        PyObject * res = PyObject_CallMethod(module_state->window->app, "update", NULL);
         if (!res) {
             return NULL;
         }
@@ -212,16 +224,6 @@ PyObject * meth_run(PyObject * self) {
     }
 
     Py_RETURN_NONE;
-}
-
-static PyObject * Window_meth_on_update(Window * self, PyObject * arg) {
-    if (!PyCallable_Check(arg)) {
-        return NULL;
-    }
-    PyObject * old = self->on_update;
-    self->on_update = Py_NewRef(arg);
-    Py_DECREF(old);
-    return Py_NewRef(arg);
 }
 
 static PyObject * Loader_meth_load_opengl_function(PyObject * self, PyObject * arg) {
@@ -247,7 +249,6 @@ static void default_dealloc(PyObject * self) {
 }
 
 static PyMethodDef Window_methods[] = {
-    {"on_update", (PyCFunction)Window_meth_on_update, METH_O},
     {0},
 };
 
