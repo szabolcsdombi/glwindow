@@ -199,8 +199,16 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
 
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
 
+    if (!module_state->window) {
+        PyObject * res = PyObject_CallMethod(self, "init", NULL);
+        Py_XDECREF(res);
+        if (!res) {
+            return NULL;
+        }
+    }
+
     PyObject * old_app = module_state->window->app;
-    module_state->window->app = Py_NewRef(app);
+    module_state->window->app = PyObject_CallFunction(app, NULL);
     Py_DECREF(old_app);
 
     while (true) {
