@@ -23,13 +23,6 @@ struct Window {
 
     PyObject * size;
     PyObject * app;
-
-    HWND hwnd;
-    HDC hdc;
-    HGLRC hrc;
-
-    int width;
-    int height;
 };
 
 struct Loader {
@@ -55,11 +48,38 @@ struct ModuleState {
     Audio * audio;
 };
 
+HWND hwnd;
+HDC hdc;
+HGLRC hrc;
+
+int width;
+int height;
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     switch (umsg) {
         case WM_CLOSE: {
             PostQuitMessage(0);
             return 0;
+        }
+        case WM_KEYDOWN:
+        case WM_KEYUP: {
+            return 0;
+        }
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP: {
+            static bool alt = false;
+            if (wparam == VK_MENU) {
+                alt = umsg == WM_SYSKEYDOWN;
+                return 0;
+            }
+            if (alt && wparam == VK_F4 && umsg == WM_SYSKEYDOWN) {
+                PostQuitMessage(0);
+                return 0;
+            }
+            return 1;
+        }
+        case WM_SYSCHAR: {
+            return 1;
         }
     }
     return DefWindowProc(hwnd, umsg, wparam, lparam);
@@ -135,15 +155,15 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     WNDCLASS wnd_class = {CS_OWNDC, WindowProc, 0, 0, hinst, NULL, hcursor, NULL, NULL, "mywindow"};
     RegisterClass(&wnd_class);
 
-    window->width = 1280;
-    window->height = 720;
-    window->size = Py_BuildValue("(ii)", window->width, window->height);
+    width = 1280;
+    height = 720;
+    window->size = Py_BuildValue("(ii)", width, height);
 
     int style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
     int sw = GetSystemMetrics(SM_CXSCREEN);
     int sh = GetSystemMetrics(SM_CYSCREEN);
 
-    RECT rect = {0, 0, window->width, window->height};
+    RECT rect = {0, 0, width, height};
     AdjustWindowRect(&rect, style, false);
 
     int w = rect.right - rect.left;
@@ -151,22 +171,22 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     int x = (sw - w) / 2;
     int y = (sh - h) / 2;
 
-    window->hwnd = CreateWindow("mywindow", "OpenGL Window", style, x, y, w, h, NULL, NULL, hinst, NULL);
-    if (!window->hwnd) {
+    hwnd = CreateWindow("mywindow", "OpenGL Window", style, x, y, w, h, NULL, NULL, hinst, NULL);
+    if (!hwnd) {
         PyErr_BadInternalCall();
         return NULL;
     }
 
-    window->hdc = GetDC(window->hwnd);
+    hdc = GetDC(hwnd);
 
     DWORD pfd_flags = PFD_DOUBLEBUFFER | PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED;
     PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1, pfd_flags, 0, 32};
 
-    int pixelformat = ChoosePixelFormat(window->hdc, &pfd);
-    SetPixelFormat(window->hdc, pixelformat, &pfd);
+    int pixelformat = ChoosePixelFormat(hdc, &pfd);
+    SetPixelFormat(hdc, pixelformat, &pfd);
 
-    HGLRC loader_hglrc = wglCreateContext(window->hdc);
-    wglMakeCurrent(window->hdc, loader_hglrc);
+    HGLRC loader_hglrc = wglCreateContext(hdc);
+    wglMakeCurrent(hdc, loader_hglrc);
 
     HGLRC (WINAPI * wglCreateContextAttribsARB)(HDC hdc, HGLRC hrc, const int * attrib_list);
     BOOL (WINAPI * wglSwapIntervalEXT)(int interval);
@@ -198,14 +218,14 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
         0, 0,
     };
 
-    window->hrc = wglCreateContextAttribsARB(window->hdc, NULL, attribs);
+    hrc = wglCreateContextAttribsARB(hdc, NULL, attribs);
 
-    if (!window->hrc) {
+    if (!hrc) {
         PyErr_BadInternalCall();
         return NULL;
     }
 
-    wglMakeCurrent(window->hdc, window->hrc);
+    wglMakeCurrent(hdc, hrc);
     wglSwapIntervalEXT(1);
 
     audio->device = alcOpenDevice(NULL);
@@ -227,7 +247,7 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     Py_DECREF(old_app);
 
     while (true) {
-        SwapBuffers(module_state->window->hdc);
+        SwapBuffers(hdc);
         DwmFlush();
 
         MSG msg = {};
