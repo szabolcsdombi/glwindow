@@ -210,8 +210,9 @@ void * lookup_opengl_function(const char * name) {
 
 #else
 
-#include <SDL.h>
-#include <SDL_opengl.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <dlfcn.h>
 
 #ifdef __APPLE__
 #define LIBGL "/System/Library/Frameworks/OpenGL.framework/OpenGL"
@@ -244,22 +245,24 @@ int init_window(Window * window) {
         return -1;
     }
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
     glctx = SDL_GL_CreateContext(wnd);
     if (!glctx) {
         PyErr_SetString(PyExc_RuntimeError, SDL_GetError());
         return -1;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
     SDL_GL_SetSwapInterval(1);
+    return 0;
 }
 
 int run_main_loop(Window * window) {
     while (true) {
         SDL_Event e;
+        SDL_PollEvent(&e);
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 return 0;
@@ -272,18 +275,14 @@ int run_main_loop(Window * window) {
         }
         Py_XDECREF(res);
 
-        SDL_GL_SwapWindow(sdlWindow);
+        SDL_GL_SwapWindow(wnd);
     }
 
     return 0;
 }
 
 void * lookup_opengl_function(const char * name) {
-    void * proc = (void *)GetProcAddress(opengl, name);
-    if (!proc) {
-        proc = (void *)wglGetProcAddress(name);
-    }
-    return proc;
+    return (void *)dlsym(opengl, name);
 }
 
 #endif
@@ -503,6 +502,6 @@ static PyModuleDef module_def = {
     PyModuleDef_HEAD_INIT, "glwindow", NULL, sizeof(ModuleState), module_methods, module_slots, NULL, NULL, (freefunc)module_free,
 };
 
-extern PyObject * PyInit_glwindow() {
+extern "C" PyObject * PyInit_glwindow() {
     return PyModuleDef_Init(&module_def);
 }
