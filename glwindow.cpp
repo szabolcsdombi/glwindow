@@ -178,9 +178,6 @@ int init_window(Window * window) {
 
 int run_main_loop(Window * window) {
     while (true) {
-        SwapBuffers(hdc);
-        DwmFlush();
-
         MSG msg = {};
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
@@ -195,6 +192,9 @@ int run_main_loop(Window * window) {
             return -1;
         }
         Py_XDECREF(res);
+
+        SwapBuffers(hdc);
+        DwmFlush();
     }
 
     return 0;
