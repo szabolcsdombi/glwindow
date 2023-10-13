@@ -2,8 +2,8 @@ import sys
 
 from setuptools import Extension, setup
 
-include_dirs = ['./include/'],
-library_dirs = ['./libs/'],
+include_dirs = ['./include/']
+library_dirs = ['./libs/']
 libraries = []
 
 define_macros = [
