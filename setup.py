@@ -39,6 +39,8 @@ ext = Extension(
     sources=['./glwindow.cpp'],
     define_macros=define_macros,
     py_limited_api=True,
+    include_dirs=include_dirs,
+    library_dirs=library_dirs,
     libraries=libraries,
 )
 
