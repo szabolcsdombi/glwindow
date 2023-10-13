@@ -2,6 +2,8 @@ import sys
 
 from setuptools import Extension, setup
 
+include_dirs = ['./include/'],
+library_dirs = ['./libs/'],
 libraries = []
 
 define_macros = [
@@ -20,15 +22,23 @@ if sys.platform.startswith('win'):
 
 else:
     define_macros.append(('USE_SDL', None))
-    libraries.extend(['SDL2', 'GL', 'openal'])
+    libraries.extend(['SDL2', 'openal'])
+
+if sys.platform.startswith('darwin'):
+    import os
+    import subprocess
+
+    sdl = subprocess.check_output(['brew', '--prefix', 'sdl2']).strip().decode()
+    openal = subprocess.check_output(['brew', '--prefix', 'openal-soft']).strip().decode()
+
+    include_dirs.extend([os.path.join(sdl, 'include'), os.path.join(openal, 'include')])
+    library_dirs.extend([os.path.join(sdl, 'lib'), os.path.join(openal, 'lib')])
 
 ext = Extension(
     name='glwindow',
     sources=['./glwindow.cpp'],
     define_macros=define_macros,
     py_limited_api=True,
-    include_dirs=['./include/'],
-    library_dirs=['./libs/'],
     libraries=libraries,
 )
 
