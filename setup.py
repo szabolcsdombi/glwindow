@@ -1,14 +1,15 @@
+import os
 import sys
 
 from setuptools import Extension, setup
 
 include_dirs = ['./include/']
 library_dirs = ['./libs/']
+sources = ['./glwindow.cpp']
 libraries = []
 
 define_macros = [
     ('Py_LIMITED_API', 0x030A0000),
-    ('PY_SSIZE_T_CLEAN', None),
 ]
 
 stubs = {
@@ -25,7 +26,6 @@ else:
     libraries.extend(['SDL2', 'openal'])
 
 if sys.platform.startswith('darwin'):
-    import os
     import subprocess
 
     sdl = subprocess.check_output(['brew', '--prefix', 'sdl2']).strip().decode()
@@ -34,9 +34,22 @@ if sys.platform.startswith('darwin'):
     include_dirs.extend([os.path.join(sdl, 'include'), os.path.join(openal, 'include')])
     library_dirs.extend([os.path.join(sdl, 'lib'), os.path.join(openal, 'lib')])
 
+if os.getenv('PYODIDE'):
+    import re
+
+    with open('glwindow_web.js') as f:
+        setup_script = re.sub(r'\s+', ' ', f.read(), flags=re.M)
+
+    define_macros = [
+        ('SETUP_SCRIPT', f'"{setup_script}"'),
+    ]
+    sources = ['glwindow_web.cpp']
+    libraries = []
+    stubs = {}
+
 ext = Extension(
     name='glwindow',
-    sources=['./glwindow.cpp'],
+    sources=sources,
     define_macros=define_macros,
     py_limited_api=True,
     include_dirs=include_dirs,
@@ -48,5 +61,6 @@ setup(
     name='glwindow',
     version='0.1.0',
     ext_modules=[ext],
+    py_modules=['_glwindow'],
     **stubs,
 )
