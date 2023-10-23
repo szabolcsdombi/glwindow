@@ -101,11 +101,8 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     module_state->window->size = Py_BuildValue("(ii)", width, height);
 
     PyObject * zengl = PyImport_ImportModule("zengl");
-    PyObject * setup_gl_script = PyObject_GetAttrString(zengl, "setup_gl");
-    PyObject * setup_gl = PyObject_CallMethod(js, "eval", "(O)", setup_gl_script);
-    PyObject * wasm = PyObject_GetAttrString(pyodide_js, "_module");
     PyObject * gl = PyObject_GetAttrString(wnd, "gl");
-    PyObject_CallFunction(setup_gl, "(OO)", wasm, gl);
+    PyObject_CallMethod(zengl, "init", "(O)", gl);
 
     module_state->window->app = PyObject_CallFunction(app, NULL);
 
