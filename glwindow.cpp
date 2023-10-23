@@ -42,11 +42,9 @@ struct ModuleState {
     PyObject * helper;
 
     PyTypeObject * Window_type;
-    PyTypeObject * Loader_type;
     PyTypeObject * Audio_type;
 
     Window * window;
-    Loader * loader;
     Audio * audio;
 };
 
@@ -317,11 +315,6 @@ PyObject * meth_get_window(PyObject * self) {
     return Py_XNewRef(module_state->window);
 }
 
-PyObject * meth_get_loader(PyObject * self) {
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-    return Py_XNewRef(module_state->loader);
-}
-
 PyObject * meth_get_audio(PyObject * self) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
     return Py_XNewRef(module_state->audio);
@@ -439,7 +432,6 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
 
     module_state->window = PyObject_New(Window, module_state->Window_type);
-    module_state->loader = PyObject_New(Loader, module_state->Loader_type);
     module_state->audio = PyObject_New(Audio, module_state->Audio_type);
 
     if (init_window(module_state->window)) {
@@ -450,6 +442,19 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
         return NULL;
     }
 
+    PyObject * zengl = PyImport_ImportModule("zengl");
+    if (!zengl) {
+        return NULL;
+    }
+
+    PyObject * zengl_init = PyObject_CallMethod(zengl, "init", "(N)", self);
+    if (!zengl_init) {
+        return NULL;
+    }
+
+    Py_DECREF(zengl_init);
+    Py_DECREF(zengl);
+
     module_state->window->app = PyObject_CallFunction(app, NULL);
 
     if (run_main_loop(module_state->window)) {
@@ -459,7 +464,7 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     Py_RETURN_NONE;
 }
 
-static PyObject * Loader_meth_load_opengl_function(PyObject * self, PyObject * arg) {
+static PyObject * meth_load_opengl_function(PyObject * self, PyObject * arg) {
     if (!PyUnicode_CheckExact(arg)) {
         return NULL;
     }
@@ -496,17 +501,6 @@ static PyType_Slot Window_slots[] = {
     {0},
 };
 
-static PyMethodDef Loader_methods[] = {
-    {"load_opengl_function", (PyCFunction)Loader_meth_load_opengl_function, METH_O},
-    {0},
-};
-
-static PyType_Slot Loader_slots[] = {
-    {Py_tp_methods, Loader_methods},
-    {Py_tp_dealloc, (void *)default_dealloc},
-    {0},
-};
-
 static PyMethodDef Audio_methods[] = {
     // {"foo", (PyCFunction)Audio_meth_foo, METH_VARARGS | METH_KEYWORDS},
     {0},
@@ -532,7 +526,6 @@ static PyType_Slot Audio_slots[] = {
 
 
 static PyType_Spec Window_spec = {"Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
-static PyType_Spec Loader_spec = {"Loader", sizeof(Loader), 0, Py_TPFLAGS_DEFAULT, Loader_slots};
 static PyType_Spec Audio_spec = {"Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
 
 static int module_exec(PyObject * self) {
@@ -544,15 +537,12 @@ static int module_exec(PyObject * self) {
     }
 
     module_state->window = NULL;
-    module_state->loader = NULL;
     module_state->audio = NULL;
 
     module_state->Window_type = (PyTypeObject *)PyType_FromSpec(&Window_spec);
-    module_state->Loader_type = (PyTypeObject *)PyType_FromSpec(&Loader_spec);
     module_state->Audio_type = (PyTypeObject *)PyType_FromSpec(&Audio_spec);
 
     PyModule_AddObject(self, "Window", Py_NewRef(module_state->Window_type));
-    PyModule_AddObject(self, "Loader", Py_NewRef(module_state->Loader_type));
     PyModule_AddObject(self, "Audio", Py_NewRef(module_state->Audio_type));
 
     PyModule_AddObject(self, "__version__", PyUnicode_FromString("0.1.0"));
@@ -567,11 +557,11 @@ static PyModuleDef_Slot module_slots[] = {
 static PyMethodDef module_methods[] = {
     {"run", (PyCFunction)meth_run, METH_VARARGS | METH_KEYWORDS, NULL},
     {"get_window", (PyCFunction)meth_get_window, METH_NOARGS, NULL},
-    {"get_loader", (PyCFunction)meth_get_loader, METH_NOARGS, NULL},
     {"get_audio", (PyCFunction)meth_get_audio, METH_NOARGS, NULL},
     {"decode_qoi", (PyCFunction)meth_decode_qoi, METH_O, NULL},
     {"decode_qoa", (PyCFunction)meth_decode_qoa, METH_O, NULL},
     {"load_font", (PyCFunction)meth_load_font, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"load_opengl_function", (PyCFunction)meth_load_opengl_function, METH_O, NULL},
     {0},
 };
 
