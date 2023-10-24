@@ -491,6 +491,9 @@ int qoi_expected_size(const void *data, int size, int channels) {
     unsigned int header_magic = qoi_read_32(bytes, &p);
     unsigned int width = qoi_read_32(bytes, &p);
     unsigned int height = qoi_read_32(bytes, &p);
+    if (header_magic != QOI_MAGIC) {
+        return 0;
+    }
     return width * height * channels;
 }
 
