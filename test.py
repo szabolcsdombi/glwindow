@@ -6,7 +6,7 @@ class App:
     def __init__(self):
         self.wnd = glwindow.get_window()
         self.audio = glwindow.get_audio()
-        self.ctx = zengl.context(glwindow.get_loader())
+        self.ctx = zengl.context()
         self.image = self.ctx.image(self.wnd.size, 'rgba8unorm', texture=False)
 
     def update(self):
