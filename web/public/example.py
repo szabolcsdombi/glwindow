@@ -71,13 +71,14 @@ class WireframeTerrain:
             index_buffer=self.index_buffer,
             vertex_count=self.index_buffer.size // 4,
         )
-        self.aspect = size[0] / size[1]
         self.time = 0.0
 
     def render(self):
+        window = glwindow.get_window()
+        aspect = window.view[0] / window.view[1]
         self.time += 1.0 / 60.0
         eye = (math.cos(self.time * 0.3) * 3.0, math.sin(self.time * 0.3) * 3.0, 1.5)
-        camera = zengl.camera(eye, (0.0, 0.0, 0.0), aspect=self.aspect, fov=45.0)
+        camera = zengl.camera(eye, (0.0, 0.0, 0.0), aspect=aspect, fov=45.0)
         self.uniform_buffer.write(camera)
         self.image.clear()
         self.depth.clear()

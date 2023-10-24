@@ -24,6 +24,7 @@ struct Window {
     PyObject_HEAD
 
     PyObject * size;
+    PyObject * view;
     PyObject * app;
 };
 
@@ -110,6 +111,7 @@ int init_window(Window * window) {
     width = 1280;
     height = 720;
     window->size = Py_BuildValue("(ii)", width, height);
+    window->view = Py_BuildValue("(ii)", width, height);
 
     int style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
     int sw = GetSystemMetrics(SM_CXSCREEN);
@@ -485,6 +487,7 @@ static PyMethodDef Window_methods[] = {
 
 static PyMemberDef Window_members[] = {
     {"size", T_OBJECT, offsetof(Window, size), READONLY},
+    {"view", T_OBJECT, offsetof(Window, view), READONLY},
     {0},
 };
 

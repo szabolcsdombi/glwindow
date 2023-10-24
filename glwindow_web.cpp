@@ -13,6 +13,7 @@ struct Window {
     PyObject_HEAD
 
     PyObject * size;
+    PyObject * view;
     PyObject * app;
 };
 
@@ -78,76 +79,8 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     module_state->window = PyObject_New(Window, module_state->Window_type);
     module_state->audio = PyObject_New(Audio, module_state->Audio_type);
 
-    PyObject * js = PyImport_ImportModule("js");
-    if (!js) {
-        return NULL;
-    }
-
-    PyObject * ffi = PyImport_ImportModule("pyodide.ffi");
-    if (!ffi) {
-        return NULL;
-    }
-
-    PyObject * pyodide_js = PyImport_ImportModule("pyodide_js");
-    if (!pyodide_js) {
-        return NULL;
-    }
-
-    PyObject * setup_function = PyObject_CallMethod(js, "eval", "(s)", GLWINDOW_JS);
-    if (!setup_function) {
-        return NULL;
-    }
-
-    PyObject * wnd = PyObject_CallFunction(setup_function, "(O)", pyodide_js);
-    if (!wnd) {
-        return NULL;
-    }
-
-    PyObject * width = PyObject_GetAttrString(wnd, "width");
-    PyObject * height = PyObject_GetAttrString(wnd, "height");
-    if (!width || !height || !PyLong_Check(width) || !PyLong_Check(height)) {
-        return NULL;
-    }
-
-    module_state->window->size = Py_BuildValue("(ii)", PyLong_AsLong(width), PyLong_AsLong(height));
-
-    PyObject * zengl = PyImport_ImportModule("zengl");
-    if (!zengl) {
-        return NULL;
-    }
-
-    PyObject * gl = PyObject_GetAttrString(wnd, "gl");
-    if (!gl) {
-        return NULL;
-    }
-
-    PyObject * init_result = PyObject_CallMethod(zengl, "init", "(O)", gl);
+    PyObject * init_result = PyObject_CallMethod(module_state->helper, "init_glwindow_web", "(OOs)", module_state->window, app, GLWINDOW_JS);
     if (!init_result) {
-        return NULL;
-    }
-
-    module_state->window->app = PyObject_CallFunction(app, NULL);
-    if (!module_state->window->app) {
-        return NULL;
-    }
-
-    PyObject * setup_render = PyObject_GetAttrString(wnd, "setupRender");
-    if (!setup_render) {
-        return NULL;
-    }
-
-    PyObject * update = PyObject_GetAttrString(module_state->window->app, "update");
-    if (!update) {
-        return NULL;
-    }
-
-    PyObject * update_proxy = PyObject_CallMethod(ffi, "create_proxy", "(O)", update);
-    if (!update_proxy) {
-        return NULL;
-    }
-
-    PyObject * setup_render_result = PyObject_CallFunction(setup_render, "(O)", update_proxy);
-    if (!setup_render_result) {
         return NULL;
     }
 
@@ -164,6 +97,11 @@ static PyMethodDef Window_methods[] = {
 
 static PyMemberDef Window_members[] = {
     {"size", T_OBJECT, offsetof(Window, size), READONLY},
+    {"view", T_OBJECT, offsetof(Window, view), READONLY},
+
+    {"_size", T_OBJECT, offsetof(Window, size), 0},
+    {"_view", T_OBJECT, offsetof(Window, view), 0},
+    {"_app", T_OBJECT, offsetof(Window, app), 0},
     {0},
 };
 
@@ -204,8 +142,8 @@ static PyType_Slot Audio_slots[] = {
 };
 
 
-static PyType_Spec Window_spec = {"Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
-static PyType_Spec Audio_spec = {"Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
+static PyType_Spec Window_spec = {"glwindow.Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
+static PyType_Spec Audio_spec = {"glwindow.Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
 
 static int module_exec(PyObject * self) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
@@ -221,8 +159,8 @@ static int module_exec(PyObject * self) {
     module_state->Window_type = (PyTypeObject *)PyType_FromSpec(&Window_spec);
     module_state->Audio_type = (PyTypeObject *)PyType_FromSpec(&Audio_spec);
 
-    PyModule_AddObject(self, "glwindow.Window", Py_NewRef(module_state->Window_type));
-    PyModule_AddObject(self, "glwindow.Audio", Py_NewRef(module_state->Audio_type));
+    PyModule_AddObject(self, "Window", Py_NewRef(module_state->Window_type));
+    PyModule_AddObject(self, "Audio", Py_NewRef(module_state->Audio_type));
 
     PyModule_AddObject(self, "__version__", PyUnicode_FromString("0.1.0"));
     return 0;

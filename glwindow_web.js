@@ -25,14 +25,15 @@
   const gl = canvas.getContext('webgl2', options);
   document.body.appendChild(canvas);
 
-  const setupRender = (update) => {
+  const setup_render = (update) => {
     const render = () => {
-      update();
+      const rect = canvas.getBoundingClientRect();
+      update(rect.right - rect.left, rect.bottom - rect.top);
       requestAnimationFrame(render);
     };
 
     requestAnimationFrame(render);
   };
 
-  return { gl, width, height, setupRender };
+  return { gl, width, height, setup_render };
 }
