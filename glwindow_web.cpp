@@ -16,10 +16,6 @@ struct Window {
     PyObject * app;
 };
 
-struct Loader {
-    PyObject_HEAD
-};
-
 struct Audio {
     PyObject_HEAD
 };
@@ -28,22 +24,15 @@ struct ModuleState {
     PyObject * helper;
 
     PyTypeObject * Window_type;
-    PyTypeObject * Loader_type;
     PyTypeObject * Audio_type;
 
     Window * window;
-    Loader * loader;
     Audio * audio;
 };
 
 PyObject * meth_get_window(PyObject * self) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
     return Py_XNewRef(module_state->window);
-}
-
-PyObject * meth_get_loader(PyObject * self) {
-    ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
-    return Py_XNewRef(module_state->loader);
 }
 
 PyObject * meth_get_audio(PyObject * self) {
@@ -87,34 +76,82 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
 
     module_state->window = PyObject_New(Window, module_state->Window_type);
-    module_state->loader = PyObject_New(Loader, module_state->Loader_type);
     module_state->audio = PyObject_New(Audio, module_state->Audio_type);
 
     PyObject * js = PyImport_ImportModule("js");
-    PyObject * ffi = PyImport_ImportModule("pyodide.ffi");
-    PyObject * pyodide_js = PyImport_ImportModule("pyodide_js");
-    PyObject * setup_function = PyObject_CallMethod(js, "eval", "(s)", SETUP_SCRIPT);
-    PyObject * wnd = PyObject_CallFunction(setup_function, "(O)", pyodide_js);
+    if (!js) {
+        return NULL;
+    }
 
-    int width = PyLong_AsLong(PyObject_GetAttrString(wnd, "width"));
-    int height = PyLong_AsLong(PyObject_GetAttrString(wnd, "height"));
-    module_state->window->size = Py_BuildValue("(ii)", width, height);
+    PyObject * ffi = PyImport_ImportModule("pyodide.ffi");
+    if (!ffi) {
+        return NULL;
+    }
+
+    PyObject * pyodide_js = PyImport_ImportModule("pyodide_js");
+    if (!pyodide_js) {
+        return NULL;
+    }
+
+    PyObject * setup_function = PyObject_CallMethod(js, "eval", "(s)", GLWINDOW_JS);
+    if (!setup_function) {
+        return NULL;
+    }
+
+    PyObject * wnd = PyObject_CallFunction(setup_function, "(O)", pyodide_js);
+    if (!wnd) {
+        return NULL;
+    }
+
+    PyObject * width = PyObject_GetAttrString(wnd, "width");
+    PyObject * height = PyObject_GetAttrString(wnd, "height");
+    if (!width || !height || !PyLong_Check(width) || !PyLong_Check(height)) {
+        return NULL;
+    }
+
+    module_state->window->size = Py_BuildValue("(ii)", PyLong_AsLong(width), PyLong_AsLong(height));
 
     PyObject * zengl = PyImport_ImportModule("zengl");
+    if (!zengl) {
+        return NULL;
+    }
+
     PyObject * gl = PyObject_GetAttrString(wnd, "gl");
-    PyObject_CallMethod(zengl, "init", "(O)", gl);
+    if (!gl) {
+        return NULL;
+    }
+
+    PyObject * init_result = PyObject_CallMethod(zengl, "init", "(O)", gl);
+    if (!init_result) {
+        return NULL;
+    }
 
     module_state->window->app = PyObject_CallFunction(app, NULL);
+    if (!module_state->window->app) {
+        return NULL;
+    }
 
     PyObject * setup_render = PyObject_GetAttrString(wnd, "setupRender");
-    PyObject * update = PyObject_GetAttrString(module_state->window->app, "update");
-    PyObject * update_proxy = PyObject_CallMethod(ffi, "create_proxy", "(O)", update);
-    PyObject_CallFunction(setup_render, "(O)", update_proxy);
-    Py_RETURN_NONE;
-}
+    if (!setup_render) {
+        return NULL;
+    }
 
-static PyObject * Loader_meth_load_opengl_function(PyObject * self, PyObject * arg) {
-    return PyLong_FromVoidPtr(NULL);
+    PyObject * update = PyObject_GetAttrString(module_state->window->app, "update");
+    if (!update) {
+        return NULL;
+    }
+
+    PyObject * update_proxy = PyObject_CallMethod(ffi, "create_proxy", "(O)", update);
+    if (!update_proxy) {
+        return NULL;
+    }
+
+    PyObject * setup_render_result = PyObject_CallFunction(setup_render, "(O)", update_proxy);
+    if (!setup_render_result) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
 }
 
 static void default_dealloc(PyObject * self) {
@@ -139,17 +176,6 @@ static PyType_Slot Window_slots[] = {
     {Py_tp_methods, Window_methods},
     {Py_tp_members, Window_members},
     {Py_tp_getset, Window_getset},
-    {Py_tp_dealloc, (void *)default_dealloc},
-    {0},
-};
-
-static PyMethodDef Loader_methods[] = {
-    {"load_opengl_function", (PyCFunction)Loader_meth_load_opengl_function, METH_O},
-    {0},
-};
-
-static PyType_Slot Loader_slots[] = {
-    {Py_tp_methods, Loader_methods},
     {Py_tp_dealloc, (void *)default_dealloc},
     {0},
 };
@@ -179,7 +205,6 @@ static PyType_Slot Audio_slots[] = {
 
 
 static PyType_Spec Window_spec = {"Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
-static PyType_Spec Loader_spec = {"Loader", sizeof(Loader), 0, Py_TPFLAGS_DEFAULT, Loader_slots};
 static PyType_Spec Audio_spec = {"Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
 
 static int module_exec(PyObject * self) {
@@ -191,16 +216,13 @@ static int module_exec(PyObject * self) {
     }
 
     module_state->window = NULL;
-    module_state->loader = NULL;
     module_state->audio = NULL;
 
     module_state->Window_type = (PyTypeObject *)PyType_FromSpec(&Window_spec);
-    module_state->Loader_type = (PyTypeObject *)PyType_FromSpec(&Loader_spec);
     module_state->Audio_type = (PyTypeObject *)PyType_FromSpec(&Audio_spec);
 
-    PyModule_AddObject(self, "Window", Py_NewRef(module_state->Window_type));
-    PyModule_AddObject(self, "Loader", Py_NewRef(module_state->Loader_type));
-    PyModule_AddObject(self, "Audio", Py_NewRef(module_state->Audio_type));
+    PyModule_AddObject(self, "glwindow.Window", Py_NewRef(module_state->Window_type));
+    PyModule_AddObject(self, "glwindow.Audio", Py_NewRef(module_state->Audio_type));
 
     PyModule_AddObject(self, "__version__", PyUnicode_FromString("0.1.0"));
     return 0;
@@ -214,7 +236,6 @@ static PyModuleDef_Slot module_slots[] = {
 static PyMethodDef module_methods[] = {
     {"run", (PyCFunction)meth_run, METH_VARARGS | METH_KEYWORDS, NULL},
     {"get_window", (PyCFunction)meth_get_window, METH_NOARGS, NULL},
-    {"get_loader", (PyCFunction)meth_get_loader, METH_NOARGS, NULL},
     {"get_audio", (PyCFunction)meth_get_audio, METH_NOARGS, NULL},
     {"decode_qoi", (PyCFunction)meth_decode_qoi, METH_O, NULL},
     {"decode_qoa", (PyCFunction)meth_decode_qoa, METH_O, NULL},

@@ -38,10 +38,10 @@ if os.getenv('PYODIDE'):
     import re
 
     with open('glwindow_web.js') as f:
-        setup_script = re.sub(r'\s+', ' ', f.read(), flags=re.M)
+        glwindow_js = re.sub(r'\s+', ' ', f.read(), flags=re.M)
 
     define_macros = [
-        ('SETUP_SCRIPT', f'"{setup_script}"'),
+        ('GLWINDOW_JS', f'"{glwindow_js}"'),
     ]
     sources = ['glwindow_web.cpp']
     libraries = []

@@ -525,8 +525,8 @@ static PyType_Slot Audio_slots[] = {
 };
 
 
-static PyType_Spec Window_spec = {"Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
-static PyType_Spec Audio_spec = {"Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
+static PyType_Spec Window_spec = {"glwindow.Window", sizeof(Window), 0, Py_TPFLAGS_DEFAULT, Window_slots};
+static PyType_Spec Audio_spec = {"glwindow.Audio", sizeof(Audio), 0, Py_TPFLAGS_DEFAULT, Audio_slots};
 
 static int module_exec(PyObject * self) {
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);

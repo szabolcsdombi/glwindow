@@ -1,12 +1,17 @@
 (pyodide) => {
+  const width = window.screen.width * window.devicePixelRatio;
+  const height = window.screen.height * window.devicePixelRatio;
   const canvas = document.createElement('canvas');
-  canvas.width = 1280;
-  canvas.height = 720;
+
+  canvas.id = 'canvas';
+  canvas.width = width;
+  canvas.height = height;
 
   canvas.style.position = 'fixed';
-  canvas.style.left = '50%';
-  canvas.style.top = '50%';
-  canvas.style.transform = 'translate(-50%, -50%)';
+  canvas.style.left = '0';
+  canvas.style.top = '0';
+  canvas.style.width = '100vw';
+  canvas.style.height = '100vh';
 
   const options = {
     powerPreference: 'high-performance',
@@ -29,5 +34,5 @@
     requestAnimationFrame(render);
   };
 
-  return { gl, width: canvas.width, height: canvas.height, setupRender };
+  return { gl, width, height, setupRender };
 }
