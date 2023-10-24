@@ -23,8 +23,10 @@
 struct Window {
     PyObject_HEAD
 
+    PyObject * keys;
     PyObject * size;
     PyObject * view;
+    PyObject * mouse;
     PyObject * app;
 };
 
@@ -49,6 +51,12 @@ struct ModuleState {
     Audio * audio;
 };
 
+static void add_key(PyObject * keys, const char * key, int value) {
+    PyObject * v = PyLong_FromLong(value);
+    PyDict_SetItemString(keys, key, v);
+    Py_DECREF(v);
+}
+
 #ifndef USE_SDL
 
 #define WINVER 0x0601
@@ -64,12 +72,22 @@ HGLRC hrc;
 
 int width;
 int height;
+int focus;
+
+int mouse_x;
+int mouse_y;
+
+unsigned char keys[256];
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     switch (umsg) {
         case WM_CLOSE: {
             PostQuitMessage(0);
             return 0;
+        }
+        case WM_ACTIVATE: {
+            focus = !!wparam;
+            break;
         }
         case WM_KEYDOWN:
         case WM_KEYUP: {
@@ -112,6 +130,130 @@ int init_window(Window * window) {
     height = 720;
     window->size = Py_BuildValue("(ii)", width, height);
     window->view = Py_BuildValue("(ii)", width, height);
+    window->mouse = Py_BuildValue("(ii)", 0, 0);
+
+    PyObject * keys = PyDict_New();
+    add_key(keys, "mouse1", 1);
+    add_key(keys, "mouse2", 2);
+    add_key(keys, "mouse3", 4);
+    add_key(keys, "tab", VK_TAB);
+    add_key(keys, "left_arrow", VK_LEFT);
+    add_key(keys, "right_arrow", VK_RIGHT);
+    add_key(keys, "up_arrow", VK_UP);
+    add_key(keys, "down_arrow", VK_DOWN);
+    add_key(keys, "page_up", VK_PRIOR);
+    add_key(keys, "page_down", VK_NEXT);
+    add_key(keys, "home", VK_HOME);
+    add_key(keys, "end", VK_END);
+    add_key(keys, "insert", VK_INSERT);
+    add_key(keys, "delete", VK_DELETE);
+    add_key(keys, "backspace", VK_BACK);
+    add_key(keys, "space", VK_SPACE);
+    add_key(keys, "enter", VK_RETURN);
+    add_key(keys, "escape", VK_ESCAPE);
+    add_key(keys, "apostrophe", VK_OEM_7);
+    add_key(keys, "comma", VK_OEM_COMMA);
+    add_key(keys, "minus", VK_OEM_MINUS);
+    add_key(keys, "period", VK_OEM_PERIOD);
+    add_key(keys, "slash", VK_OEM_2);
+    add_key(keys, "semicolon", VK_OEM_1);
+    add_key(keys, "equal", VK_OEM_PLUS);
+    add_key(keys, "left_bracket", VK_OEM_4);
+    add_key(keys, "backslash", VK_OEM_5);
+    add_key(keys, "right_bracket", VK_OEM_6);
+    add_key(keys, "grave_accent", VK_OEM_3);
+    add_key(keys, "caps_lock", VK_CAPITAL);
+    add_key(keys, "scroll_lock", VK_SCROLL);
+    add_key(keys, "num_lock", VK_NUMLOCK);
+    add_key(keys, "print_screen", VK_SNAPSHOT);
+    add_key(keys, "pause", VK_PAUSE);
+    add_key(keys, "keypad_0", VK_NUMPAD0);
+    add_key(keys, "keypad_1", VK_NUMPAD1);
+    add_key(keys, "keypad_2", VK_NUMPAD2);
+    add_key(keys, "keypad_3", VK_NUMPAD3);
+    add_key(keys, "keypad_4", VK_NUMPAD4);
+    add_key(keys, "keypad_5", VK_NUMPAD5);
+    add_key(keys, "keypad_6", VK_NUMPAD6);
+    add_key(keys, "keypad_7", VK_NUMPAD7);
+    add_key(keys, "keypad_8", VK_NUMPAD8);
+    add_key(keys, "keypad_9", VK_NUMPAD9);
+    add_key(keys, "keypad_decimal", VK_DECIMAL);
+    add_key(keys, "keypad_divide", VK_DIVIDE);
+    add_key(keys, "keypad_multiply", VK_MULTIPLY);
+    add_key(keys, "keypad_subtract", VK_SUBTRACT);
+    add_key(keys, "keypad_add", VK_ADD);
+    add_key(keys, "left_shift", VK_LSHIFT);
+    add_key(keys, "left_ctrl", VK_LCONTROL);
+    add_key(keys, "left_alt", VK_LMENU);
+    add_key(keys, "left_super", VK_LWIN);
+    add_key(keys, "right_shift", VK_RSHIFT);
+    add_key(keys, "right_ctrl", VK_RCONTROL);
+    add_key(keys, "right_alt", VK_RMENU);
+    add_key(keys, "right_super", VK_RWIN);
+    add_key(keys, "menu", VK_APPS);
+    add_key(keys, "0", '0');
+    add_key(keys, "1", '1');
+    add_key(keys, "2", '2');
+    add_key(keys, "3", '3');
+    add_key(keys, "4", '4');
+    add_key(keys, "5", '5');
+    add_key(keys, "6", '6');
+    add_key(keys, "7", '7');
+    add_key(keys, "8", '8');
+    add_key(keys, "9", '9');
+    add_key(keys, "a", 'A');
+    add_key(keys, "b", 'B');
+    add_key(keys, "c", 'C');
+    add_key(keys, "d", 'D');
+    add_key(keys, "e", 'E');
+    add_key(keys, "f", 'F');
+    add_key(keys, "g", 'G');
+    add_key(keys, "h", 'H');
+    add_key(keys, "i", 'I');
+    add_key(keys, "j", 'J');
+    add_key(keys, "k", 'K');
+    add_key(keys, "l", 'L');
+    add_key(keys, "m", 'M');
+    add_key(keys, "n", 'N');
+    add_key(keys, "o", 'O');
+    add_key(keys, "p", 'P');
+    add_key(keys, "q", 'Q');
+    add_key(keys, "r", 'R');
+    add_key(keys, "s", 'S');
+    add_key(keys, "t", 'T');
+    add_key(keys, "u", 'U');
+    add_key(keys, "v", 'V');
+    add_key(keys, "w", 'W');
+    add_key(keys, "x", 'X');
+    add_key(keys, "y", 'Y');
+    add_key(keys, "z", 'Z');
+    add_key(keys, "f1", VK_F1);
+    add_key(keys, "f2", VK_F2);
+    add_key(keys, "f3", VK_F3);
+    add_key(keys, "f4", VK_F4);
+    add_key(keys, "f5", VK_F5);
+    add_key(keys, "f6", VK_F6);
+    add_key(keys, "f7", VK_F7);
+    add_key(keys, "f8", VK_F8);
+    add_key(keys, "f9", VK_F9);
+    add_key(keys, "f10", VK_F10);
+    add_key(keys, "f11", VK_F11);
+    add_key(keys, "f12", VK_F12);
+    add_key(keys, "f13", VK_F13);
+    add_key(keys, "f14", VK_F14);
+    add_key(keys, "f15", VK_F15);
+    add_key(keys, "f16", VK_F16);
+    add_key(keys, "f17", VK_F17);
+    add_key(keys, "f18", VK_F18);
+    add_key(keys, "f19", VK_F19);
+    add_key(keys, "f20", VK_F20);
+    add_key(keys, "f21", VK_F21);
+    add_key(keys, "f22", VK_F22);
+    add_key(keys, "f23", VK_F23);
+    add_key(keys, "f24", VK_F24);
+    add_key(keys, "app_back", VK_BROWSER_BACK);
+    add_key(keys, "app_forward", VK_BROWSER_FORWARD);
+    window->keys = keys;
 
     int style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
     int sw = GetSystemMetrics(SM_CXSCREEN);
@@ -133,7 +275,7 @@ int init_window(Window * window) {
 
     hdc = GetDC(hwnd);
 
-    DWORD pfd_flags = PFD_DOUBLEBUFFER | PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED;
+    DWORD pfd_flags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED | PFD_DEPTH_DONTCARE | PFD_DOUBLEBUFFER;
     PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1, pfd_flags, 0, 32};
 
     int pixelformat = ChoosePixelFormat(hdc, &pfd);
@@ -193,6 +335,20 @@ int run_main_loop(Window * window) {
             }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+        }
+
+        if (focus) {
+            GetKeyboardState(keys);
+            POINT cursor = {};
+            POINT zero = {};
+            GetCursorPos(&cursor);
+            ClientToScreen(hwnd, &zero);
+            mouse_x = cursor.x - zero.x;
+            mouse_y = height - (cursor.y - zero.y) - 1;
+            Py_DECREF(window->mouse);
+            window->mouse = Py_BuildValue("(ii)", mouse_x, mouse_y);
+        } else {
+            memset(keys, 0, sizeof(keys));
         }
 
         PyObject * res = PyObject_CallMethod(window->app, "update", NULL);
@@ -466,6 +622,18 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
     Py_RETURN_NONE;
 }
 
+static PyObject * Window_meth_key_down(Window * self, PyObject * arg) {
+    PyObject * key = PyDict_GetItem(self->keys, arg);
+    if (!key) {
+        return NULL;
+    }
+    int k = PyLong_AsLong(key);
+    if (keys[k] & 0x80) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
 static PyObject * meth_load_opengl_function(PyObject * self, PyObject * arg) {
     if (!PyUnicode_CheckExact(arg)) {
         return NULL;
@@ -482,12 +650,14 @@ static void default_dealloc(PyObject * self) {
 }
 
 static PyMethodDef Window_methods[] = {
+    {"key_down", (PyCFunction)Window_meth_key_down, METH_O, NULL},
     {0},
 };
 
 static PyMemberDef Window_members[] = {
     {"size", T_OBJECT, offsetof(Window, size), READONLY},
     {"view", T_OBJECT, offsetof(Window, view), READONLY},
+    {"mouse", T_OBJECT, offsetof(Window, mouse), READONLY},
     {0},
 };
 
