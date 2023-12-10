@@ -19,7 +19,7 @@ stubs = {
 }
 
 if sys.platform.startswith('win'):
-    libraries.extend(['gdi32', 'user32', 'opengl32', 'dwmapi', 'powrprof', 'openal32'])
+    libraries.extend(['gdi32', 'user32', 'opengl32', 'dwmapi', 'shcore', 'powrprof', 'openal32'])
 
 else:
     define_macros.append(('USE_SDL', None))

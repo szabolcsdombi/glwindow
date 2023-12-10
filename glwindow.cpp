@@ -63,6 +63,7 @@ static void add_key(PyObject * keys, const char * key, int value) {
 #include <Windows.h>
 #include <Dwmapi.h>
 #include <PowerSetting.h>
+#include <ShellScalingApi.h>
 #include <GL/GL.h>
 
 HMODULE opengl;
@@ -118,6 +119,8 @@ int init_window(Window * window) {
     SetPriorityClass(process, HIGH_PRIORITY_CLASS);
     SetProcessPriorityBoost(process, false);
     PowerSetActiveScheme(NULL, &GUID_MIN_POWER_SAVINGS);
+
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
     opengl = GetModuleHandle("opengl32");
 
