@@ -59,8 +59,8 @@ ext = Extension(
 
 setup(
     name='glwindow',
-    version='0.1.0',
+    version='0.2.0',
     ext_modules=[ext],
-    py_modules=['_glwindow'],
+    py_modules=['_glwindow', 'glwnd'],
     **stubs,
 )

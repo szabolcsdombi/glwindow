@@ -647,7 +647,11 @@ PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
 
     alcMakeContextCurrent(audio->context);
 
-    module_state->window->app = PyObject_CallFunction(app, NULL);
+    if (PyUnicode_Check(app)) {
+        module_state->window->app = PyImport_Import(app);
+    } else {
+        module_state->window->app = PyObject_CallFunction(app, NULL);
+    }
 
     ShowWindow(hwnd, SW_SHOW);
     BringWindowToTop(hwnd);
