@@ -1,5 +1,12 @@
-#include <Python.h>
-#include <structmember.h>
+#define UNICODE
+#define _UNICODE
+#define WINVER 0x0601
+#include <Windows.h>
+#include <ShellScalingApi.h>
+#include <PowerSetting.h>
+#include <Dwmapi.h>
+
+#include <GL/GL.h>
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -19,6 +26,69 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb_truetype.h"
+
+#include <Python.h>
+#include <structmember.h>
+
+#define WGL_NUMBER_PIXEL_FORMATS_ARB 0x2000
+#define WGL_DRAW_TO_WINDOW_ARB 0x2001
+#define WGL_ACCELERATION_ARB 0x2003
+#define WGL_SWAP_METHOD_ARB 0x2007
+#define WGL_SUPPORT_OPENGL_ARB 0x2010
+#define WGL_DOUBLE_BUFFER_ARB 0x2011
+#define WGL_COLOR_BITS_ARB 0x2014
+#define WGL_PIXEL_TYPE_ARB 0x2013
+#define WGL_RED_BITS_ARB 0x2015
+#define WGL_GREEN_BITS_ARB 0x2017
+#define WGL_BLUE_BITS_ARB 0x2019
+#define WGL_ALPHA_BITS_ARB 0x201B
+#define WGL_DEPTH_BITS_ARB 0x2022
+#define WGL_STENCIL_BITS_ARB 0x2023
+#define WGL_FULL_ACCELERATION_ARB 0x2027
+#define WGL_TYPE_RGBA_ARB 0x202B
+#define WGL_SAMPLES_ARB 0x2042
+#define WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB 0x20A9
+
+#define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x0001
+#define WGL_CONTEXT_ES_PROFILE_BIT_EXT 0x0004
+#define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB 0x2092
+#define WGL_CONTEXT_FLAGS_ARB 0x2094
+#define WGL_CONTEXT_DEBUG_BIT_ARB 0x0001
+#define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB 0x0002
+#define WGL_CONTEXT_FLAG_NO_ERROR_BIT_KHR 0x0008
+
+#define GL_DEBUG_OUTPUT 0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
+
+const char * (* wglGetExtensionsStringARB)(HDC hdc);
+BOOL (* wglGetPixelFormatAttribivARB)(HDC, int, int, UINT, const int *, int *);
+HGLRC (* wglCreateContextAttribsARB)(HDC, HGLRC, const int *);
+BOOL (* wglSwapIntervalEXT)(int);
+
+typedef void (* GLDEBUGPROC)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const char * message, const void * userParam);
+void (* glDebugMessageControl)(GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled);
+void (* glDebugMessageCallback)(GLDEBUGPROC callback, const void * userParam);
+
+void debug_output(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char * message, const void * user_param) {
+    PyObject_CallFunction((PyObject *)user_param, "(IIIIs)", source, type, id, severity, message);
+    PyErr_Clear();
+}
+
+HMODULE opengl;
+HWND hwnd;
+HDC hdc;
+HGLRC hrc;
+
+int width;
+int height;
+int focus;
+
+int mouse_x;
+int mouse_y;
+
+unsigned char keys[256];
 
 struct Window {
     PyObject_HEAD
@@ -57,84 +127,7 @@ static void add_key(PyObject * keys, const char * key, int value) {
     Py_DECREF(v);
 }
 
-#ifndef USE_SDL
-
-#define WINVER 0x0601
-#include <Windows.h>
-#include <Dwmapi.h>
-#include <PowerSetting.h>
-#include <ShellScalingApi.h>
-#include <GL/GL.h>
-
-HMODULE opengl;
-HWND hwnd;
-HDC hdc;
-HGLRC hrc;
-
-int width;
-int height;
-int focus;
-
-int mouse_x;
-int mouse_y;
-
-unsigned char keys[256];
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
-    switch (umsg) {
-        case WM_CLOSE: {
-            PostQuitMessage(0);
-            return 0;
-        }
-        case WM_ACTIVATE: {
-            focus = !!wparam;
-            break;
-        }
-        case WM_KEYDOWN:
-        case WM_KEYUP: {
-            return 0;
-        }
-        case WM_SYSKEYDOWN:
-        case WM_SYSKEYUP: {
-            static bool alt = false;
-            if (wparam == VK_MENU) {
-                alt = umsg == WM_SYSKEYDOWN;
-                return 0;
-            }
-            if (alt && wparam == VK_F4 && umsg == WM_SYSKEYDOWN) {
-                PostQuitMessage(0);
-                return 0;
-            }
-            return 1;
-        }
-        case WM_SYSCHAR: {
-            return 1;
-        }
-    }
-    return DefWindowProc(hwnd, umsg, wparam, lparam);
-}
-
-int init_window(Window * window) {
-    HANDLE process = GetCurrentProcess();
-    SetPriorityClass(process, HIGH_PRIORITY_CLASS);
-    SetProcessPriorityBoost(process, false);
-    PowerSetActiveScheme(NULL, &GUID_MIN_POWER_SAVINGS);
-
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-
-    opengl = GetModuleHandle("opengl32");
-
-    HINSTANCE hinst = GetModuleHandle(NULL);
-    HCURSOR hcursor = (HCURSOR)LoadCursor(NULL, IDC_ARROW);
-    WNDCLASS wnd_class = {CS_OWNDC, WindowProc, 0, 0, hinst, NULL, hcursor, NULL, NULL, "mywindow"};
-    RegisterClass(&wnd_class);
-
-    width = 1280;
-    height = 720;
-    window->size = Py_BuildValue("(ii)", width, height);
-    window->view = Py_BuildValue("(ii)", width, height);
-    window->mouse = Py_BuildValue("(ii)", 0, 0);
-
+PyObject * build_keys() {
     PyObject * keys = PyDict_New();
     add_key(keys, "mouse1", 1);
     add_key(keys, "mouse2", 2);
@@ -256,115 +249,41 @@ int init_window(Window * window) {
     add_key(keys, "f24", VK_F24);
     add_key(keys, "app_back", VK_BROWSER_BACK);
     add_key(keys, "app_forward", VK_BROWSER_FORWARD);
-    window->keys = keys;
-
-    int style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
-    int sw = GetSystemMetrics(SM_CXSCREEN);
-    int sh = GetSystemMetrics(SM_CYSCREEN);
-
-    RECT rect = {0, 0, width, height};
-    AdjustWindowRect(&rect, style, false);
-
-    int w = rect.right - rect.left;
-    int h = rect.bottom - rect.top;
-    int x = (sw - w) / 2;
-    int y = (sh - h) / 2;
-
-    hwnd = CreateWindow("mywindow", "OpenGL Window", style, x, y, w, h, NULL, NULL, hinst, NULL);
-    if (!hwnd) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    hdc = GetDC(hwnd);
-
-    DWORD pfd_flags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED | PFD_DEPTH_DONTCARE | PFD_DOUBLEBUFFER;
-    PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1, pfd_flags, 0, 32};
-
-    int pixelformat = ChoosePixelFormat(hdc, &pfd);
-    SetPixelFormat(hdc, pixelformat, &pfd);
-
-    HGLRC loader_hglrc = wglCreateContext(hdc);
-    wglMakeCurrent(hdc, loader_hglrc);
-
-    HGLRC (WINAPI * wglCreateContextAttribsARB)(HDC hdc, HGLRC hrc, const int * attrib_list);
-    BOOL (WINAPI * wglSwapIntervalEXT)(int interval);
-
-    *(PROC *)&wglCreateContextAttribsARB = wglGetProcAddress("wglCreateContextAttribsARB");
-    *(PROC *)&wglSwapIntervalEXT = wglGetProcAddress("wglSwapIntervalEXT");
-
-    if (!wglCreateContextAttribsARB || !wglSwapIntervalEXT) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(loader_hglrc);
-
-    const int WGL_CONTEXT_PROFILE_MASK = 0x9126;
-    const int WGL_CONTEXT_CORE_PROFILE_BIT = 0x0001;
-    const int WGL_CONTEXT_MAJOR_VERSION = 0x2091;
-    const int WGL_CONTEXT_MINOR_VERSION = 0x2092;
-    const int WGL_CONTEXT_FLAGS = 0x2094;
-    const int WGL_CONTEXT_FORWARD_COMPATIBLE_BIT = 0x0002;
-    const int WGL_CONTEXT_FLAG_NO_ERROR_BIT = 0x0008;
-
-    int attribs[] = {
-        WGL_CONTEXT_FLAGS, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT,
-        WGL_CONTEXT_PROFILE_MASK, WGL_CONTEXT_CORE_PROFILE_BIT,
-        WGL_CONTEXT_MAJOR_VERSION, 3,
-        WGL_CONTEXT_MINOR_VERSION, 3,
-        0, 0,
-    };
-
-    hrc = wglCreateContextAttribsARB(hdc, NULL, attribs);
-
-    if (!hrc) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    wglMakeCurrent(hdc, hrc);
-    wglSwapIntervalEXT(1);
-    return 0;
+    return keys;
 }
 
-int run_main_loop(Window * window) {
-    while (true) {
-        MSG msg = {};
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-            if (msg.message == WM_QUIT) {
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
+    switch (umsg) {
+        case WM_CLOSE: {
+            PostQuitMessage(0);
+            return 0;
+        }
+        case WM_ACTIVATE: {
+            focus = !!wparam;
+            break;
+        }
+        case WM_KEYDOWN:
+        case WM_KEYUP: {
+            return 0;
+        }
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP: {
+            static bool alt = false;
+            if (wparam == VK_MENU) {
+                alt = umsg == WM_SYSKEYDOWN;
                 return 0;
             }
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+            if (alt && wparam == VK_F4 && umsg == WM_SYSKEYDOWN) {
+                PostQuitMessage(0);
+                return 0;
+            }
+            return 1;
         }
-
-        if (focus) {
-            GetKeyboardState(keys);
-            POINT cursor = {};
-            POINT zero = {};
-            GetCursorPos(&cursor);
-            ClientToScreen(hwnd, &zero);
-            mouse_x = cursor.x - zero.x;
-            mouse_y = height - (cursor.y - zero.y) - 1;
-            Py_DECREF(window->mouse);
-            window->mouse = Py_BuildValue("(ii)", mouse_x, mouse_y);
-        } else {
-            memset(keys, 0, sizeof(keys));
+        case WM_SYSCHAR: {
+            return 1;
         }
-
-        PyObject * res = PyObject_CallMethod(window->app, "update", NULL);
-        if (!res) {
-            return -1;
-        }
-        Py_XDECREF(res);
-
-        SwapBuffers(hdc);
-        DwmFlush();
     }
-
-    return 0;
+    return DefWindowProc(hwnd, umsg, wparam, lparam);
 }
 
 void * lookup_opengl_function(const char * name) {
@@ -373,102 +292,6 @@ void * lookup_opengl_function(const char * name) {
         proc = (void *)wglGetProcAddress(name);
     }
     return proc;
-}
-
-#else
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
-#include <dlfcn.h>
-
-#ifdef __APPLE__
-#define LIBGL "/System/Library/Frameworks/OpenGL.framework/OpenGL"
-#else
-#define LIBGL "libGL.so"
-#endif
-
-void * opengl;
-SDL_Window * wnd;
-SDL_GLContext glctx;
-
-int width;
-int height;
-
-int init_window(Window * window) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, SDL_GetError());
-        return -1;
-    }
-
-    opengl = dlopen(LIBGL, RTLD_LAZY);
-
-    width = 1280;
-    height = 720;
-    window->size = Py_BuildValue("(ii)", width, height);
-
-    wnd = SDL_CreateWindow("OpenGL Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    if (!wnd) {
-        PyErr_SetString(PyExc_RuntimeError, SDL_GetError());
-        return -1;
-    }
-
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    glctx = SDL_GL_CreateContext(wnd);
-    if (!glctx) {
-        PyErr_SetString(PyExc_RuntimeError, SDL_GetError());
-        return -1;
-    }
-
-    SDL_GL_SetSwapInterval(1);
-    return 0;
-}
-
-int run_main_loop(Window * window) {
-    while (true) {
-        SDL_Event e;
-        SDL_PollEvent(&e);
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
-                return 0;
-            }
-        }
-
-        PyObject * res = PyObject_CallMethod(window->app, "update", NULL);
-        if (!res) {
-            return -1;
-        }
-        Py_XDECREF(res);
-
-        SDL_GL_SwapWindow(wnd);
-    }
-
-    return 0;
-}
-
-void * lookup_opengl_function(const char * name) {
-    return (void *)dlsym(opengl, name);
-}
-
-#endif
-
-int init_audio(Audio * audio) {
-    audio->device = alcOpenDevice(NULL);
-    if (!audio->device) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    audio->context = alcCreateContext(audio->device, NULL);
-    if (!audio->context) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    alcMakeContextCurrent(audio->context);
-    return 0;
 }
 
 PyObject * meth_get_window(PyObject * self) {
@@ -582,44 +405,287 @@ PyObject * meth_load_font(PyObject * self, PyObject * args, PyObject * kwargs) {
 }
 
 PyObject * meth_run(PyObject * self, PyObject * args, PyObject * kwargs) {
-    const char * keywords[] = {"app", NULL};
+    const char * keywords[] = {"app", "vsync", "legacy", "gles", "debug_callback", "choose_pixel_format", NULL};
 
     PyObject * app;
+    int vsync = true;
+    int legacy = false;
+    int gles = false;
+    PyObject * debug_callback = Py_None;
+    PyObject * choose_pixel_format = Py_None;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char **)keywords, &app)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|pppOO", (char **)keywords, &app, &vsync, &legacy, &gles, &debug_callback, &choose_pixel_format)) {
         return NULL;
     }
 
     ModuleState * module_state = (ModuleState *)PyModule_GetState(self);
 
-    module_state->window = PyObject_New(Window, module_state->Window_type);
-    module_state->audio = PyObject_New(Audio, module_state->Audio_type);
+    Window * window = PyObject_New(Window, module_state->Window_type);
+    Audio * audio = PyObject_New(Audio, module_state->Audio_type);
 
-    if (init_window(module_state->window)) {
+    module_state->window = window;
+    module_state->audio = audio;
+
+    HANDLE process = GetCurrentProcess();
+    SetPriorityClass(process, HIGH_PRIORITY_CLASS);
+    SetProcessPriorityBoost(process, false);
+    PowerSetActiveScheme(NULL, &GUID_MIN_POWER_SAVINGS);
+    SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+
+    opengl = GetModuleHandle(L"opengl32");
+
+    HINSTANCE hinst = GetModuleHandle(NULL);
+    HCURSOR hcursor = (HCURSOR)LoadCursor(NULL, IDC_ARROW);
+    WNDCLASS wnd_class = {CS_OWNDC, WindowProc, 0, 0, hinst, NULL, hcursor, NULL, NULL, L"mywindow"};
+    RegisterClass(&wnd_class);
+
+    width = GetSystemMetrics(SM_CXSCREEN);
+    height = GetSystemMetrics(SM_CYSCREEN);
+    window->size = Py_BuildValue("(ii)", width, height);
+    window->view = Py_BuildValue("(ii)", width, height);
+    window->mouse = Py_BuildValue("(ii)", 0, 0);
+    window->keys = build_keys();
+
+    hwnd = CreateWindow(L"mywindow", L"OpenGL Window", WS_POPUP, 0, 0, width, height, NULL, NULL, hinst, NULL);
+    if (!hwnd) {
+        PyErr_BadInternalCall();
         return NULL;
     }
 
-    if (init_audio(module_state->audio)) {
+    hdc = GetDC(hwnd);
+
+    HWND loader_hwnd = CreateWindow(L"mywindow", NULL, 0, 0, 0, 0, 0, NULL, NULL, hinst, NULL);
+    HDC loader_hdc = GetDC(loader_hwnd);
+
+    DWORD loader_pfd_flags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED;
+    PIXELFORMATDESCRIPTOR loader_pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1, loader_pfd_flags, 0, 32};
+    int loader_pixelformat = ChoosePixelFormat(loader_hdc, &loader_pfd);
+    SetPixelFormat(loader_hdc, loader_pixelformat, &loader_pfd);
+    HGLRC loader_hglrc = wglCreateContext(loader_hdc);
+    wglMakeCurrent(loader_hdc, loader_hglrc);
+
+    *(PROC *)&wglGetExtensionsStringARB = wglGetProcAddress("wglGetExtensionsStringARB");
+    *(PROC *)&wglGetPixelFormatAttribivARB = wglGetProcAddress("wglGetPixelFormatAttribivARB");
+    *(PROC *)&wglCreateContextAttribsARB = wglGetProcAddress("wglCreateContextAttribsARB");
+    *(PROC *)&wglSwapIntervalEXT = wglGetProcAddress("wglSwapIntervalEXT");
+    *(PROC *)&glDebugMessageCallback = wglGetProcAddress("glDebugMessageCallback");
+    *(PROC *)&glDebugMessageControl = wglGetProcAddress("glDebugMessageControl");
+
+    PyObject * gl_extensions = PyUnicode_FromString((char *)glGetString(GL_EXTENSIONS));
+    PyObject * gl_extensions_list = PyUnicode_Split(gl_extensions, NULL, -1);
+    PyObject * wgl_extensions = PyUnicode_FromString(wglGetExtensionsStringARB(hdc));
+    PyObject * wgl_extensions_list = PyUnicode_Split(wgl_extensions, NULL, -1);
+    PyObject * extensions_list = PyNumber_Add(gl_extensions_list, wgl_extensions_list);
+    PyObject * extensions = PySet_New(extensions_list);
+
+    bool GL_KHR_debug = PySet_Contains(extensions, PyUnicode_FromString("GL_KHR_debug"));
+    bool GL_KHR_no_error = PySet_Contains(extensions, PyUnicode_FromString("GL_KHR_no_error"));
+    bool WGL_EXT_create_context_es_profile = PySet_Contains(extensions, PyUnicode_FromString("WGL_EXT_create_context_es_profile"));
+
+    Py_DECREF(gl_extensions);
+    Py_DECREF(gl_extensions_list);
+    Py_DECREF(wgl_extensions);
+    Py_DECREF(wgl_extensions_list);
+    Py_DECREF(extensions_list);
+    Py_DECREF(extensions);
+
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(loader_hglrc);
+    ReleaseDC(loader_hwnd, loader_hdc);
+    DestroyWindow(loader_hwnd);
+
+    if (!wglGetPixelFormatAttribivARB) {
+        choose_pixel_format = Py_None;
+    }
+
+    if (!GL_KHR_debug) {
+        debug_callback = Py_None;
+    }
+
+    if (!WGL_EXT_create_context_es_profile) {
+        gles = false;
+    }
+
+    if (!wglSwapIntervalEXT) {
+        vsync = false;
+    }
+
+    if (!wglCreateContextAttribsARB) {
+        legacy = true;
+    }
+
+    int pixel_format = 1;
+
+    if (choose_pixel_format != Py_None) {
+        int num_formats = 0;
+        int num_formats_query[] = {WGL_NUMBER_PIXEL_FORMATS_ARB};
+        wglGetPixelFormatAttribivARB(hdc, 1, 0, 1, num_formats_query, &num_formats);
+        PyObject * pixel_formats = PyList_New(0);
+        for (int i = 1; i <= num_formats; ++i) {
+            const int format_query_size = 14;
+            int format_query[format_query_size] = {
+                WGL_DRAW_TO_WINDOW_ARB,
+                WGL_SUPPORT_OPENGL_ARB,
+                WGL_ACCELERATION_ARB,
+                WGL_PIXEL_TYPE_ARB,
+                WGL_SWAP_METHOD_ARB,
+                WGL_DOUBLE_BUFFER_ARB,
+                WGL_RED_BITS_ARB,
+                WGL_GREEN_BITS_ARB,
+                WGL_BLUE_BITS_ARB,
+                WGL_ALPHA_BITS_ARB,
+                WGL_DEPTH_BITS_ARB,
+                WGL_STENCIL_BITS_ARB,
+                WGL_SAMPLES_ARB,
+                WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB,
+            };
+            int parameters[format_query_size] = {};
+            wglGetPixelFormatAttribivARB(hdc, i, 0, format_query_size, format_query, parameters);
+            if (!parameters[0] || !parameters[1] || parameters[2] != WGL_FULL_ACCELERATION_ARB) {
+                continue;
+            }
+            if (parameters[3] != WGL_TYPE_RGBA_ARB) {
+                continue;
+            }
+            const char * swap = "unknown";
+            switch (parameters[4]) {
+                case 0x2028: swap = "exchange"; break;
+                case 0x2029: swap = "copy"; break;
+                case 0x202A: swap = "undefined"; break;
+            }
+            PyObject * obj = Py_BuildValue(
+                "{sisssOs(iiii)sisisisO}",
+                "pixel_format", i,
+                "swap", swap,
+                "double_buffer", parameters[5] ? Py_True : Py_False,
+                "color_bits", parameters[6], parameters[7], parameters[8], parameters[9],
+                "depth_bits", parameters[10],
+                "stencil_bits", parameters[11],
+                "samples", parameters[12],
+                "srgb", parameters[13] ? Py_True : Py_False
+            );
+            PyList_Append(pixel_formats, obj);
+            Py_DECREF(obj);
+        }
+
+        PyObject * selected_pixel_format = PyObject_CallFunction(choose_pixel_format, "(O)", pixel_formats);
+        if (!selected_pixel_format) {
+            return NULL;
+        }
+        if (!PyLong_Check(selected_pixel_format)) {
+            PyErr_BadInternalCall();
+            return NULL;
+        }
+        pixel_format = PyLong_AsLong(selected_pixel_format);
+        Py_DECREF(selected_pixel_format);
+    }
+
+    PIXELFORMATDESCRIPTOR pfd = {};
+    DescribePixelFormat(hdc, pixel_format, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
+    SetPixelFormat(hdc, pixel_format, &pfd);
+
+    int context_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+    int profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+    int major_version = 3;
+    int minor_version = 3;
+
+    if (gles) {
+        profile = WGL_CONTEXT_ES_PROFILE_BIT_EXT;
+        minor_version = 0;
+    }
+
+    if (debug_callback != Py_None) {
+        context_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
+    } else if (GL_KHR_no_error) {
+        context_flags |= WGL_CONTEXT_FLAG_NO_ERROR_BIT_KHR;
+    }
+
+    int attribs[] = {
+        WGL_CONTEXT_FLAGS_ARB, context_flags,
+        WGL_CONTEXT_PROFILE_MASK_ARB, profile,
+        WGL_CONTEXT_MAJOR_VERSION_ARB, major_version,
+        WGL_CONTEXT_MINOR_VERSION_ARB, minor_version,
+        0, 0,
+    };
+
+    if (legacy) {
+        hrc = wglCreateContext(hdc);
+    } else {
+        hrc = wglCreateContextAttribsARB(hdc, NULL, attribs);
+    }
+
+    if (!hrc) {
+        PyErr_BadInternalCall();
         return NULL;
     }
 
-    PyObject * zengl = PyImport_ImportModule("zengl");
-    if (!zengl) {
+    wglMakeCurrent(hdc, hrc);
+
+    if (vsync) {
+        wglSwapIntervalEXT(1);
+    }
+
+    if (debug_callback != Py_None) {
+        Py_INCREF(debug_callback);
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(debug_output, debug_callback);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, true);
+    }
+
+    audio->device = alcOpenDevice(NULL);
+    if (!audio->device) {
+        PyErr_BadInternalCall();
         return NULL;
     }
 
-    PyObject * zengl_init = PyObject_CallMethod(zengl, "init", "(N)", self);
-    if (!zengl_init) {
+    audio->context = alcCreateContext(audio->device, NULL);
+    if (!audio->context) {
+        PyErr_BadInternalCall();
         return NULL;
     }
 
-    Py_DECREF(zengl_init);
-    Py_DECREF(zengl);
+    alcMakeContextCurrent(audio->context);
 
     module_state->window->app = PyObject_CallFunction(app, NULL);
 
-    if (run_main_loop(module_state->window)) {
-        return NULL;
+    ShowWindow(hwnd, SW_SHOW);
+    BringWindowToTop(hwnd);
+    SetForegroundWindow(hwnd);
+    SetFocus(hwnd);
+
+    while (true) {
+        MSG msg = {};
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                Py_RETURN_NONE;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        if (focus) {
+            GetKeyboardState(keys);
+            POINT cursor = {};
+            POINT zero = {};
+            GetCursorPos(&cursor);
+            ClientToScreen(hwnd, &zero);
+            mouse_x = cursor.x - zero.x;
+            mouse_y = height - (cursor.y - zero.y);
+            Py_DECREF(window->mouse);
+            window->mouse = Py_BuildValue("(ii)", mouse_x, mouse_y);
+        } else {
+            memset(keys, 0, sizeof(keys));
+        }
+
+        PyObject * res = PyObject_CallMethod(window->app, "update", NULL);
+        if (!res) {
+            return NULL;
+        }
+        Py_XDECREF(res);
+
+        SwapBuffers(hdc);
+        DwmFlush();
     }
 
     Py_RETURN_NONE;
